@@ -21,17 +21,18 @@ from nltk.lm.preprocessing import pad_both_ends
 warnings.filterwarnings("ignore")
 # Read Corpus
 # Converting every text to lower case
-df = pd.read_csv('Dataset.csv')
-qa_in = list(df['Question'])
+qa_df = pd.read_csv('Dataset.csv')
+qa_in = list(qa_df['Question'])
 qa_in = ' '.join(str(e) for e in qa_in).lower()
-qa_ans = list(df['Answer'])
-qa_ans = ' '.join(str(e) for e in qa_ans).lower()
+qa_ans = list(qa_df['Answer'])
+# qa_ans = ' '.join(str(e) for e in qa_ans).lower()
 
-df = pd.read_csv('smalltalk.csv')
-smalltalk_in = list(df['Question'])
+st_df = pd.read_csv('smalltalk.csv')
+print(st_df)
+smalltalk_in = list(st_df['Question'])
 smalltalk_in = ' '.join(str(e) for e in smalltalk_in).lower()
-smalltalk_ans = list(df['Answer'])
-smalltalk_ans = ' '.join(str(e) for e in smalltalk_ans).lower()
+smalltalk_ans = list(st_df['Answer'])
+# smalltalk_ans = ' '.join(str(e) for e in smalltalk_ans).lower()
 
 # Using Punkt tokenizer
 # nltk.download('punkt')
@@ -46,11 +47,12 @@ smalltalk_ans = ' '.join(str(e) for e in smalltalk_ans).lower()
 
 # Corpus Tokenization (Split a string into meaningful units)
 qa_in_token = nltk.sent_tokenize(qa_in, language='english')
-qa_ans_token = nltk.sent_tokenize(qa_ans, language='english')
+# qa_ans_token = nltk.sent_tokenize(qa_ans, language='english')
 print(qa_in_token)
+print("before tokenize", len(smalltalk_in))
 smalltalk_in_token = sent_tokenize(smalltalk_in, language='english')
-smalltalk_ans_token = sent_tokenize(smalltalk_ans, language='english')
-print(smalltalk_in_token)
+# smalltalk_ans_token = sent_tokenize(smalltalk_ans, language='english')
+print("after tokenize", len(smalltalk_in_token))
 # sentence_tokens = nltk.sent_tokenize(df)
 # word_tokens = nltk.word_tokenize(df)
 
@@ -62,7 +64,7 @@ def lemToke(tokens):
     return [lemmer.lemmatize(token) for token in tokens]
 
 
-remove_punc = dict((ord(punct), None) for punct in string.punctuation)
+remove_punc = dict((ord(punc), None) for punc in string.punctuation)
 
 # string.punctuation = string.punctuation + '“' + '”' + '-' + '’' + '‘' + '—'
 # string.punctuation = string.punctuation.replace('.', '')
@@ -84,94 +86,106 @@ def random_response():
 
 
 # Similarity Function
-def similarity(token, user_res_len):
-    if (user_res_len <= 5):
-        TfidfVec = TfidfVectorizer(tokenizer=lemNormalize, min_df=0.01)
-    else:
-        TfidfVec = TfidfVectorizer(tokenizer=lemNormalize, min_df=0.01, stop_words='english')
-    tfidf = TfidfVec.fit_transform(token)
-    vals = cosine_similarity(tfidf[-1], tfidf)
+def similarity(token, query):
+    TfidfVec = TfidfVectorizer(tokenizer=lemNormalize, min_df=0.01)
+    tfidf = TfidfVec.fit_transform(token).toarray()
+    tfidf_query = TfidfVec.transform([query]).toarray()
+    vals = cosine_similarity(tfidf_query, tfidf)
+    print(vals.max())
     return vals
 
 
-def qa_response(user_response, token):
-    bot_response = ''
-    token.append(user_response)
+def qa_response(user_in, token):
+    # token.append(user_in)
     TfidfVec = TfidfVectorizer(tokenizer=lemNormalize, stop_words='english')
     tfidf = TfidfVec.fit_transform(token)
-    vals = cosine_similarity(tfidf[-1], tfidf)
-    idx = vals.argsort()[0][-2]
-    flat = vals.flatten()
-    flat.sort()
-    req_tfidf = flat[-2]
-    token.remove(user_response)
-    if req_tfidf == 0:
-        bot_response = bot_response + random_response()
-        return bot_response
+    tfidf_query = TfidfVec.transform([user_in]).toarray()
+    vals = cosine_similarity(tfidf_query, tfidf)
+    idx = np.argmax(vals)
+
+    if vals.max() > 0:
+        return qa_df['Answer'][idx]
     else:
-        bot_response = bot_response + token[idx]
-        return bot_response
+        return random_response()
+    # vals = cosine_similarity(tfidf[-1], tfidf)
+    # idx = vals.argsort()[0][-2]
+    # flat = vals.flatten()
+    # flat.sort()
+    # req_tfidf = flat[-2]
+    # token.remove(user_response)
+    # if req_tfidf == 0:
+    #     bot_response = bot_response + random_response()
+    #     return bot_response
+    # else:
+    #     bot_response = bot_response + token[idx]
+    #     return bot_response
 
 
-def st_response(token, token2):
-    bot_response = ''
+def st_response(user_in, token2):
+    print("doc len", len(token2))
     TfidfVec = TfidfVectorizer(tokenizer=lemNormalize)
-    tfidf = TfidfVec.fit_transform(token)
-    vals = cosine_similarity(tfidf[-1], tfidf)
-    idx = vals.argsort()[0][-2]
-    flat = vals.flatten()
-    flat.sort()
-    req_tfidf = flat[-2]
-    if req_tfidf == 0:
-        bot_response = bot_response + random_response()
-        return bot_response
-    else:
-        bot_response = bot_response + token2[idx]
-        return bot_response
+    tfidf = TfidfVec.fit_transform(token2)
+    tfidf_query = TfidfVec.transform([user_in]).toarray()
+    vals = cosine_similarity(tfidf_query, tfidf)
+    # print("doc len", len(token2))
+    idx = np.argmax(vals)
+    print("index=",idx)
 
+    if vals.max() > 0:
+        return st_df['Answer'][idx]
+    else:
+        return random_response()
 
 greeting_in = ['whats up', 'how are you', 'how are you doing', "how its going", 'what are you feeling today', 'hello', 'hi']
-greeting_out = ['hi😎', 'hey😎', 'hey there!😎', 'nods😎', "what's up😎, I am good", "what's good brother😎"]
+greeting_out = ['hi😎', 'hey😎', 'hey there!😎', '*nods*😎', "what's up😎, I am good", "what's good brother😎"]
 
 # Time Questions Dataset
 time_in = ['good morning', 'good evening', 'good afternoon', 'good night', 'can you tell me the date today',
            'what day is today', 'what is the time now']
+# Name Questions Dataset
 name_ques = ['what is my name', 'do you know my name', 'who am i', 'do you know me', 'do you know who am i',
              'do you remember my name']
 
 
 # Intent Routing
 def intent_route(user_response):
-    user_res_len = len(lemNormalize(user_response))
 
-    qa_in_token.append(user_response)
-    smalltalk_in_token.append(user_response)
-    greeting_in.append(user_response)
-    time_in.append(user_response)
-    name_ques.append(user_response)
+    # qa_in_token.append(user_response)
+    # smalltalk_in_token.append(user_response)
+    # greeting_in.append(user_response)
+    # time_in.append(user_response)
+    # name_ques.append(user_response)
 
-    ans_val = np.mean(similarity(qa_in_token, user_res_len))
-    smalltalk_val = np.mean(similarity(smalltalk_in_token, user_res_len))
-    greeting_val = np.mean(similarity(greeting_in, user_res_len))
-    time_val = np.mean(similarity(time_in, user_res_len))
-    name_val = np.mean(similarity(name_ques, user_res_len))
+    ans_val = similarity(qa_in_token, user_response).max()
+    smalltalk_val = similarity(smalltalk_in_token, user_response).max()
+    greeting_val = similarity(greeting_in, user_response).max()
+    time_val = similarity(time_in, user_response).max()
+    name_val = similarity(name_ques, user_response).max()
 
-    qa_in_token.remove(user_response)
+    # qa_in_token.remove(user_response)
 
     val_arr = [ans_val, smalltalk_val, greeting_val, time_val, name_val]
     print(val_arr)
-    if max(val_arr) < 0.2:
-        if smalltalk_val < ans_val:
-            return qa_response(user_response, qa_ans_token)
-        else:
-            return st_response(smalltalk_in_token, smalltalk_ans_token)
+    # if max(val_arr) > 0:
+    #     return qa_response(user_response, qa_in_token)
+    # else:
+    #     print("no answer")
+    if max(val_arr) < 0:
+        print("i ran first")
+        # if smalltalk_val < ans_val:
+        return qa_response(user_response, qa_in_token)
+        # else:
+        #     return st_response(smalltalk_in_token, smalltalk_ans_token)
     else:
         idx = np.argsort(val_arr, None)[-1]
+        print(idx)
         if idx == 0:
-            return qa_response(user_response, qa_ans_token)
+            # return qa_response(user_response, qa_ans_token)
+            return qa_response(user_response, qa_in_token)
 
         elif idx == 1:
-            return st_response(smalltalk_in_token, smalltalk_ans_token)
+            print("before", len(smalltalk_in_token))
+            return st_response(user_response, smalltalk_in_token)
 
         elif idx == 2:
             list_count = len(greeting_out)
@@ -237,7 +251,7 @@ print('')
 print('QQ Bot: Hi ' + name + '🤝! I am QQ Bot, you may ask me any questions now✌. If you want to end the '
                              'conversation please type bye!')
 print('')
-while flag == True:
+while flag:
     user_response = input(name + ': ')
     user_response = user_response.lower().translate(remove_punc)
 
@@ -252,9 +266,9 @@ while flag == True:
             print('')
             print('QQ Bot: ', end="")
             print(intent_route(user_response))
-            smalltalk_in_token.remove(user_response)
-            greeting_in.remove(user_response)
-            time_in.remove(user_response)
+            # smalltalk_in_token.remove(user_response)
+            # greeting_in.remove(user_response)
+            # time_in.remove(user_response)
             print('')
             print('QQ Bot: Do you have any other questions for me to answer you?')
             print('')
